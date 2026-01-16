@@ -1,0 +1,105 @@
+{
+  "_comment": "Конфигурация арбитражного бота. API ключи храни в .env файле!",
+
+  "exchanges": {
+    "binance": {
+      "name": "Binance Futures",
+      "restBaseUrl": "https://fapi.binance.com",
+      "wsBaseUrl": "wss://fstream.binance.com",
+      "enabled": true,
+      "_comment": "USDT-M Futures, крупнейшая ликвидность"
+    },
+    "mexc": {
+      "name": "MEXC Futures",
+      "restBaseUrl": "https://contract.mexc.com",
+      "wsBaseUrl": "wss://contract.mexc.com/edge",
+      "enabled": true,
+      "_comment": "Альтернативная биржа с хорошими объемами"
+    }
+  },
+
+  "arbitrage": {
+    "minSpreadPercent": 0.65,
+    "_minSpreadPercent": "Минимальный спред % для детектирования (ниже не покрывает комиссии)",
+
+    "topPairsCount": 100,
+    "_topPairsCount": "Количество топ пар по объему для мониторинга",
+
+    "useWebSocket": true,
+    "_useWebSocket": "ОБЯЗАТЕЛЬНО true для реального арбитража! REST слишком медленный",
+
+    "restFallbackIntervalMs": 0,
+    "_restFallbackIntervalMs": "Интервал REST запросов при обрыве WebSocket. 0 = НЕ использовать REST (рекомендуется)",
+
+    "reconnectDelayMs": 3000,
+    "_reconnectDelayMs": "Задержка перед переподключением WebSocket",
+
+    "excludePairs": [],
+    "_excludePairs": "Массив символов для исключения: ['BTCUSDT', 'ETHUSDT']"
+  },
+
+  "notifications": {
+    "logToConsole": true,
+    "minSpreadToNotify": 0.65,
+    "_minSpreadToNotify": "Показывать только спреды выше этого % (чтобы не спамить)",
+    "showTimestamp": true,
+    "coloredOutput": true
+  },
+
+  "fees": {
+    "_comment": "Комиссии бирж для расчета реальной прибыли",
+    "binance": {
+      "maker": 0.02,
+      "taker": 0.04,
+      "_info": "% комиссии. Проверь свой VIP уровень на бирже!"
+    },
+    "mexc": {
+      "maker": 0.0,
+      "taker": 0.03,
+      "_info": "MEXC обычно maker = 0%, taker = 0.03%"
+    }
+  },
+
+  "slippage": {
+    "_comment": "Slippage (проскальзывание) для учета изменения цены при исполнении",
+    "percent": 0.1,
+    "_percent": "% slippage (0.1% = 10 базисных пунктов). Рекомендуется 0.05-0.2%"
+  },
+
+  "trading": {
+    "_comment": "Настройки автоматической торговли",
+
+    "enabled": true,
+    "_enabled": "Включить/выключить автоматическое открытие позиций (false = только мониторинг)",
+
+    "testMode": true,
+    "_testMode": "true = тестовый режим (имитация торговли), false = реальная торговля с реальными деньгами",
+
+    "testBalanceUSD": 1000,
+    "_testBalanceUSD": "Тестовый баланс в USD для симуляции торговли. Обновляется с каждой сделкой",
+
+    "positionSizeUSD": 100,
+    "_positionSizeUSD": "Размер одной позиции в USD (будет открыта на обеих биржах)",
+
+    "marginMode": "cross",
+    "_marginMode": "Режим маржи: 'cross' (кросс-маржа) или 'isolated' (изолированная маржа)",
+
+    "leverage": 5,
+    "_leverage": "Плечо для позиций (1-125). Рекомендуется 1-3 для арбитража",
+
+    "maxOpenPositions": 3,
+    "_maxOpenPositions": "Максимальное количество одновременно открытых пар позиций",
+
+    "positionTimeoutSeconds": 0,
+    "_positionTimeoutSeconds": "Максимальное время жизни позиции в секундах (3600 = 1 час). После истечения закрывается по рынку",
+
+    "closeOnSpreadConvergence": true,
+    "_closeOnSpreadConvergence": "Закрывать позиции при схождении спреда к минимальному порогу",
+
+    "minProfitToClosePercent": 0.3,
+    "_minProfitToClosePercent": "Минимальная прибыль % для закрытия позиции при схождении спреда",
+
+    "closeOnNewOpportunity": true,
+    "_closeOnNewOpportunity": "Закрывать текущую позицию при новой возможности (если текущая прибыльная и выше minSpreadToNotify)"
+  }
+}
