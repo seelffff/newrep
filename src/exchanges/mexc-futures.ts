@@ -165,12 +165,9 @@ export class MexcFutures {
             onPriceUpdate(price);
           }
         }
-        // Обрабатываем подтверждение подписки
+        // Обрабатываем подтверждение подписки (без логирования - избыточно)
         else if (parsed.channel === 'rs.sub.ticker') {
-          // Подписка успешна
-          if (parsed.data && parsed.data.length > 0) {
-            this.logger.info(`MEXC: Подписка подтверждена для ${parsed.data[0]}`);
-          }
+          // Подписка успешна - не логируем чтобы не засорять консоль
         }
       } catch (error) {
         this.logger.error(

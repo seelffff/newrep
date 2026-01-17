@@ -87,7 +87,7 @@
     "leverage": 5,
     "_leverage": "Плечо для позиций (1-125). Рекомендуется 1-3 для арбитража",
 
-    "maxOpenPositions": 3,
+    "maxOpenPositions": 10,
     "_maxOpenPositions": "Максимальное количество одновременно открытых пар позиций",
 
     "positionTimeoutSeconds": 0,

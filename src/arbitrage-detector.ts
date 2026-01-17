@@ -87,7 +87,10 @@ export class ArbitrageDetector {
     // 3. Запускаем трейд-исполнитель (если торговля включена)
     this.tradeExecutor.start();
 
-    // 4. Подключаемся к WebSocket
+    // 4. Запускаем минутные сводки
+    this.startMinuteSummary();
+
+    // 5. Подключаемся к WebSocket
     if (this.config.arbitrage.useWebSocket) {
       await this.startWebSocketMonitoring();
     } else {
@@ -302,22 +305,9 @@ export class ArbitrageDetector {
 
     this.opportunitiesFound++;
 
-    // Логируем если спред выше порога уведомления
-    if (
-      this.config.notifications.logToConsole &&
-      spreadPercent >= this.config.notifications.minSpreadToNotify
-    ) {
-      this.logger.arbitrage({
-        symbol: opportunity.symbol,
-        buyExchange: opportunity.buyExchange.toUpperCase(),
-        sellExchange: opportunity.sellExchange.toUpperCase(),
-        buyPrice: opportunity.buyPrice,
-        sellPrice: opportunity.sellPrice,
-        spreadPercent: opportunity.spreadPercent,
-        profitPercent: opportunity.profitPercent,
-        timestamp: opportunity.timestamp,
-      });
-    }
+
+    // Логирование арбитражных возможностей отключено - используем только CompactLogger
+    // при открытии/пропуске позиций для избежания избыточных логов
 
     // Умное управление позициями
     if (this.config.trading.enabled) {
@@ -446,6 +436,31 @@ export class ArbitrageDetector {
     }
 
     return { buyPrice, sellPrice };
+  }
+
+
+  /**
+   * Запустить минутные сводки
+   */
+  private startMinuteSummary(): void {
+    const compactLogger = this.tradeExecutor.getCompactLogger();
+
+    // Функция вывода сводки
+    const printSummary = () => {
+      const openPositions = this.tradeExecutor.getOpenPositions();
+      compactLogger.printMinuteSummary(
+        openPositions,
+        (symbol: string) => this.getCurrentPrices(symbol)
+      );
+    };
+
+    // Запускаем интервал минутных сводок
+    setInterval(printSummary, 60000); // Каждую минуту
+
+    // Первая сводка через 30 секунд после старта
+    setTimeout(printSummary, 30000);
+
+    this.logger.info('Минутные сводки активированы (первая через 30 сек, затем каждые 60 сек)');
   }
 
   /**

@@ -6,6 +6,7 @@ import type {
 } from './types/exchange.js';
 import type { Config } from './types/config.js';
 import { Logger } from './utils/logger.js';
+import { CompactLogger } from './utils/compact-logger.js';
 import { randomUUID } from 'crypto';
 
 /**
@@ -14,6 +15,7 @@ import { randomUUID } from 'crypto';
 export class TradeExecutor {
   private config: Config;
   private logger: Logger;
+  private compactLogger: CompactLogger;
   private openPositions: Map<string, PositionPair> = new Map();
   private closedPositions: PositionPair[] = [];
   private skippedOpportunities: SkippedOpportunity[] = [];
@@ -34,6 +36,7 @@ export class TradeExecutor {
   constructor(config: Config, logger?: Logger) {
     this.config = config;
     this.logger = logger || new Logger(config.notifications.coloredOutput);
+    this.compactLogger = new CompactLogger(config);
 
     // Инициализируем баланс
     this.initialBalance = config.trading.testBalanceUSD;
@@ -41,7 +44,7 @@ export class TradeExecutor {
   }
 
   /**
-   * Установить функцию для получения текущих цен (используется для закрытия по таймауту)
+   * Устано��ить функцию для получения текущих цен (используется для закрытия по таймауту)
    */
   setPriceGetter(fn: (symbol: string) => { buyPrice: number; sellPrice: number } | null): void {
     this.getPricesFn = fn;
@@ -83,7 +86,7 @@ export class TradeExecutor {
     }
     this.logger.separator();
 
-    // Запускаем проверку таймаутов каждые 10 секунд
+    // Запускаем проверку тайма��тов каждые 10 секунд
     this.checkInterval = setInterval(() => {
       this.checkPositionTimeouts();
     }, 10000);
@@ -183,62 +186,14 @@ export class TradeExecutor {
     const totalCapital = this.config.trading.positionSizeUSD * 2; // LONG + SHORT
     this.currentBalance -= totalCapital;
 
-    // Детальное логирование
-    const openTimeStr = new Date(now).toISOString();
-
-    this.logger.separator();
-    this.logger.success(`✓ ОТКРЫТА ПАРА ПОЗИЦИЙ #${this.openPositions.size}`);
-    this.logger.separator();
-    this.logger.info(`📊 Общая информация:`);
-    this.logger.info(`  • Symbol: ${opportunity.symbol}`);
-    this.logger.info(`  • Pair ID: ${pairId}`);
-    this.logger.info(`  • Время открытия: ${openTimeStr}`);
-
-    if (timeoutAt === Infinity) {
-      this.logger.info(`  • Таймаут закрытия: ОТКЛЮЧЕН`);
-      this.logger.info(`  • Закрытие: только при схождении спреда (гарантированная прибыль)`);
-    } else {
-      const timeoutTimeStr = new Date(timeoutAt).toISOString();
-      this.logger.info(`  • Таймаут закрытия: ${timeoutTimeStr}`);
-      this.logger.info(`  • Макс. время жизни: ${this.config.trading.positionTimeoutSeconds}s (${(this.config.trading.positionTimeoutSeconds / 60).toFixed(1)} мин)`);
-    }
-
-    this.logger.separator();
-    this.logger.info(`📈 LONG позиция (покупка на дешевой бирже):`);
-    this.logger.info(`  • Биржа: ${opportunity.buyExchange.toUpperCase()}`);
-    this.logger.info(`  • Цена входа: ${opportunity.buyPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Количество: ${longPosition.quantity.toFixed(6)} контрактов`);
-    this.logger.info(`  • Размер позиции: $${this.config.trading.positionSizeUSD} USD`);
-    this.logger.info(`  • Плечо: ${this.config.trading.leverage}x`);
-    this.logger.info(`  • Режим маржи: ${this.config.trading.marginMode}`);
-    this.logger.info(`  • Position ID: ${longPosition.id}`);
-    this.logger.separator();
-    this.logger.info(`📉 SHORT позиция (продажа на дорогой бирже):`);
-    this.logger.info(`  • Биржа: ${opportunity.sellExchange.toUpperCase()}`);
-    this.logger.info(`  • Цена входа: ${opportunity.sellPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Количество: ${shortPosition.quantity.toFixed(6)} контрактов`);
-    this.logger.info(`  • Размер позиции: $${this.config.trading.positionSizeUSD} USD`);
-    this.logger.info(`  • Плечо: ${this.config.trading.leverage}x`);
-    this.logger.info(`  • Режим маржи: ${this.config.trading.marginMode}`);
-    this.logger.info(`  • Position ID: ${shortPosition.id}`);
-    this.logger.separator();
-    this.logger.info(`💰 Прогноз прибыли:`);
-    this.logger.info(`  • Спред при открытии: ${opportunity.spreadPercent.toFixed(2)}%`);
-    this.logger.info(`  • Прибыль после комиссий: ${opportunity.profitPercent.toFixed(2)}%`);
-    this.logger.info(`  • Ожидаемая прибыль: $${((opportunity.profitPercent / 100) * this.config.trading.positionSizeUSD * 2).toFixed(2)} USD`);
-    this.logger.info(`  • Общий капитал в позициях: $${this.config.trading.positionSizeUSD * 2} USD`);
-    this.logger.info(`  • Баланс до открытия: $${(this.currentBalance + totalCapital).toFixed(2)} USD`);
-    this.logger.info(`  • Баланс после открытия: $${this.currentBalance.toFixed(2)} USD`);
-    this.logger.separator();
+    // Компактное логирование - одна строка
+    this.compactLogger.logPositionOpened(positionPair);
   }
 
   /**
    * Имитация открытия позиции (тестовый режим)
    */
-  private simulateOpenPosition(pair: PositionPair): void {
-    this.logger.info(
-      `🧪 [TEST] Имитация открытия позиций для ${pair.symbol}...`
-    );
+  private simulateOpenPosition(_pair: PositionPair): void {
     // В тестовом режиме ничего не делаем с реальными API
   }
 
@@ -277,21 +232,25 @@ export class TradeExecutor {
         if (this.config.trading.closeOnSpreadConvergence) {
           // Если спред сходится (стал меньше минимального порога)
           if (currentSpread < this.config.arbitrage.minSpreadPercent) {
-            // В��числяем текущую прибыль
-            const longPnl =
-              ((currentBuyPrice - pair.longPosition.entryPrice) /
-                pair.longPosition.entryPrice) *
-              100;
-            const shortPnl =
-              ((pair.shortPosition.entryPrice - currentSellPrice) /
-                pair.shortPosition.entryPrice) *
-              100;
+            // Вычисляем реальную прибыль с учетом комиссий и slippage
+            const buyFee = this.config.fees[pair.longPosition.exchange as 'binance' | 'mexc'].taker / 100;
+            const sellFee = this.config.fees[pair.shortPosition.exchange as 'binance' | 'mexc'].taker / 100;
+            const slippage = this.config.slippage.percent / 100;
+
+            // LONG: купили по entryPrice, зак����ваем (продаем) по currentBuyPrice
+            const longExitPriceAfterFees = currentBuyPrice * (1 - sellFee - slippage);
+            const longPnl = ((longExitPriceAfterFees - pair.longPosition.entryPrice) / pair.longPosition.entryPrice) * 100;
+
+            // SHORT: продали по entryPrice, закрываем (покупаем) по currentSellPrice
+            const shortExitPriceAfterFees = currentSellPrice * (1 + buyFee + slippage);
+            const shortPnl = ((pair.shortPosition.entryPrice - shortExitPriceAfterFees) / pair.shortPosition.entryPrice) * 100;
+
             const totalPnl = (longPnl + shortPnl) / 2;
 
             // Закрываем если прибыль достаточная
             if (totalPnl >= this.config.trading.minProfitToClosePercent) {
               this.logger.info(
-                `Спред сошелся для ${symbol}, прибыль ${totalPnl.toFixed(2)}% - закрываем...`
+                `Спред сошелся для ${symbol}, реальная прибыль ${totalPnl.toFixed(2)}% (с комиссиями) - закрываем...`
               );
               this.closePositionPair(pairId, 'SPREAD_CONVERGENCE', currentBuyPrice, currentSellPrice);
             }
@@ -329,17 +288,21 @@ export class TradeExecutor {
     const totalPnlUSD =
       (totalPnlPercent / 100) * this.config.trading.positionSizeUSD * 2; // *2 потому что две позиции
 
+    // Вычисляем USD значения для каждой позиции
+    const longPnlUSD = (longPnl / 100) * this.config.trading.positionSizeUSD;
+    const shortPnlUSD = (shortPnl / 100) * this.config.trading.positionSizeUSD;
+
     // Обновляем позиции
     pair.longPosition.exitPrice = currentBuyPrice;
     pair.longPosition.closeTime = now;
     pair.longPosition.status = reason === 'TIMEOUT' ? 'TIMEOUT_CLOSED' : 'CLOSED';
-    pair.longPosition.pnl = (longPnl / 100) * this.config.trading.positionSizeUSD;
+    pair.longPosition.pnl = longPnlUSD;
     pair.longPosition.pnlPercent = longPnl;
 
     pair.shortPosition.exitPrice = currentSellPrice;
     pair.shortPosition.closeTime = now;
     pair.shortPosition.status = reason === 'TIMEOUT' ? 'TIMEOUT_CLOSED' : 'CLOSED';
-    pair.shortPosition.pnl = (shortPnl / 100) * this.config.trading.positionSizeUSD;
+    pair.shortPosition.pnl = shortPnlUSD;
     pair.shortPosition.pnlPercent = shortPnl;
 
     pair.status = reason === 'TIMEOUT' ? 'TIMEOUT_CLOSED' : 'CLOSED';
@@ -372,57 +335,15 @@ export class TradeExecutor {
       this.testStats.totalLoss += Math.abs(totalPnlUSD);
     }
 
-    // Детальное логирование закрытия
+
+    // Компактное логирование закрытия - одна строка
     const reasonText =
       reason === 'TIMEOUT'
         ? 'Таймаут'
         : reason === 'SPREAD_CONVERGENCE'
         ? 'Схождение спреда'
         : 'Вручную';
-
-    const closeTimeStr = new Date(now).toISOString();
-    const openTimeStr = new Date(pair.openTime).toISOString();
-    const holdTimeSeconds = ((now - pair.openTime) / 1000).toFixed(0);
-    const holdTimeMinutes = ((now - pair.openTime) / 60000).toFixed(1);
-    const isProfitable = totalPnlUSD > 0;
-
-    this.logger.separator('═');
-    this.logger[isProfitable ? 'success' : 'warn'](
-      `🔒 ЗАКРЫТА ПАРА ПОЗИЦИЙ #${this.closedPositions.length} (${reasonText})`
-    );
-    this.logger.separator('═');
-    this.logger.info(`📊 Общая информация:`);
-    this.logger.info(`  • Symbol: ${pair.symbol}`);
-    this.logger.info(`  • Pair ID: ${pair.id}`);
-    this.logger.info(`  • Время открытия: ${openTimeStr}`);
-    this.logger.info(`  • Время закрытия: ${closeTimeStr}`);
-    this.logger.info(`  • Время удержания: ${holdTimeSeconds}s (${holdTimeMinutes} мин)`);
-    this.logger.separator();
-    this.logger.info(`📈 LONG позиция (${pair.longPosition.exchange.toUpperCase()}):`);
-    this.logger.info(`  • Цена входа: ${pair.longPosition.entryPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Цена выхода: ${currentBuyPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Количество: ${pair.longPosition.quantity.toFixed(6)} контрактов`);
-    this.logger.info(`  • P&L: ${longPnl.toFixed(2)}% ($${pair.longPosition.pnl?.toFixed(2)} USD)`);
-    this.logger.separator();
-    this.logger.info(`📉 SHORT позиция (${pair.shortPosition.exchange.toUpperCase()}):`);
-    this.logger.info(`  • Цена входа: ${pair.shortPosition.entryPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Цена выхода: ${currentSellPrice.toFixed(4)} USDT`);
-    this.logger.info(`  • Количество: ${pair.shortPosition.quantity.toFixed(6)} контрактов`);
-    this.logger.info(`  • P&L: ${shortPnl.toFixed(2)}% ($${pair.shortPosition.pnl?.toFixed(2)} USD)`);
-    this.logger.separator();
-    this.logger.info(`💰 Итоговый результат:`);
-    this.logger.info(`  • Спред при открытии: ${pair.openSpread.toFixed(2)}%`);
-    this.logger.info(`  • Спред при закрытии: ${pair.currentSpread?.toFixed(2) || 'N/A'}%`);
-    this.logger.info(`  • Общая прибыль: ${totalPnlPercent.toFixed(2)}% ($${totalPnlUSD.toFixed(2)} USD)`);
-    this.logger.info(`  • Капитал в позициях был: $${this.config.trading.positionSizeUSD * 2} USD`);
-    this.logger.info(`  • Статус: ${isProfitable ? '✅ ПРИБЫЛЬ' : '❌ УБЫТОК'}`);
-    this.logger.separator();
-    this.logger.info(`📈 Текущая статистика:`);
-    this.logger.info(`  • Открытых позиций: ${this.openPositions.size}/${this.config.trading.maxOpenPositions}`);
-    this.logger.info(`  • Закрытых сделок: ${this.closedPositions.length}`);
-    this.logger.info(`  • Текущий баланс: ${this.currentBalance.toFixed(2)} USD`);
-    this.logger.info(`  • Win Rate: ${this.getStats().winRate.toFixed(1)}%`);
-    this.logger.separator('═');
+    this.compactLogger.logPositionClosed(pair, reasonText);
   }
 
   /**
@@ -445,8 +366,8 @@ export class TradeExecutor {
   /**
    * Имитация закрытия позиции (тестовый режим)
    */
-  private simulateClosePosition(pair: PositionPair): void {
-    this.logger.info(`🧪 [TEST] Имитация закрытия позиций для ${pair.symbol}`);
+  private simulateClosePosition(_pair: PositionPair): void {
+    // В тестовом режиме ничего не делаем с реальными API
   }
 
   /**
@@ -454,7 +375,7 @@ export class TradeExecutor {
    */
   recordSkippedOpportunity(
     opportunity: ArbitrageOpportunity,
-    reason: "INSUFFICIENT_BALANCE" | "POSITION_NOT_PROFITABLE" | "NO_FREE_SLOTS",
+    reason: "INSUFFICIENT_BALANCE" | "POSITION_NOT_PROFITABLE" | "NO_FREE_SLOTS" | "SYMBOL_ALREADY_OPEN" | "PROFIT_BELOW_THRESHOLD" | "SPREAD_CLOSED" | "LIQUIDITY_LOW",
     availableBalance?: number,
     requiredBalance?: number,
     currentPositionProfit?: number
@@ -476,10 +397,16 @@ export class TradeExecutor {
 
     this.skippedOpportunities.push(skipped);
 
-    // Логируем пропущенную возможность
-    this.logger.warn(
-      `⏭️  ПРОПУЩЕНА возможность ${opportunity.symbol}: спред ${opportunity.spreadPercent.toFixed(2)}%, причина: ${reason}`
-    );
+    // Компактное логирование пропущенной возможности
+    const formatted = CompactLogger.formatSkipReason(reason as any, {
+      profitPercent: opportunity.profitPercent,
+      minProfit: this.config.arbitrage.minSpreadPercent,
+      availableBalance,
+      requiredBalance,
+      currentProfit: currentPositionProfit,
+      maxPositions: this.config.trading.maxOpenPositions,
+    });
+    this.compactLogger.logPositionSkipped(opportunity.symbol, formatted.reason, formatted.details);
   }
 
   /**
@@ -577,6 +504,13 @@ export class TradeExecutor {
    */
   getInitialBalance(): number {
     return this.initialBalance;
+  }
+
+  /**
+   * Получить compact logger для минутных сводок
+   */
+  getCompactLogger(): CompactLogger {
+    return this.compactLogger;
   }
 
   /**

@@ -198,20 +198,20 @@ export class ExcelReporter {
       { header: 'LONG вход', key: 'longEntry', width: 12 },
       { header: 'LONG выход', key: 'longExit', width: 12 },
       { header: 'LONG P&L %', key: 'longPnlPercent', width: 12 },
-      { header: 'LONG P&L $', key: 'longPnl', width: 12 },
+      { header: 'LONG P&L $', key: 'longPnlUSD', width: 12 },
       { header: 'SHORT биржа', key: 'shortExchange', width: 12 },
       { header: 'SHORT вход', key: 'shortEntry', width: 12 },
       { header: 'SHORT выход', key: 'shortExit', width: 12 },
       { header: 'SHORT P&L %', key: 'shortPnlPercent', width: 12 },
-      { header: 'SHORT P&L $', key: 'shortPnl', width: 12 },
+      { header: 'SHORT P&L $', key: 'shortPnlUSD', width: 12 },
       { header: 'Спред открытия %', key: 'openSpread', width: 18 },
       { header: 'Спред закрытия %', key: 'closeSpread', width: 18 },
       { header: 'Общая прибыль %', key: 'totalPnlPercent', width: 18 },
-      { header: 'Общая прибыль $', key: 'totalPnl', width: 18 },
+      { header: 'Общая прибыль $', key: 'totalPnlUSD', width: 18 },
       { header: 'Статус', key: 'status', width: 15 },
     ];
 
-    // Форматирование заголовков
+    // Фор��атирование заголовков
     const headerRow = sheet.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     headerRow.fill = {
@@ -228,10 +228,15 @@ export class ExcelReporter {
         ? ((pair.closeTime - pair.openTime) / 60000).toFixed(2)
         : 'N/A';
 
-      const longPnl = pair.longPosition.pnl || 0;
-      const shortPnl = pair.shortPosition.pnl || 0;
-      const totalPnl = longPnl + shortPnl;
-      const totalPnlPercent = pair.actualProfit || 0;
+      // P&L в процентах (из pnlPercent)
+      const longPnlPercent = pair.longPosition.pnlPercent ?? 0;
+      const shortPnlPercent = pair.shortPosition.pnlPercent ?? 0;
+      const totalPnlPercent = pair.actualProfit ?? 0;
+
+      // P&L в USD (из pnl, который уже рассчитан в trade-executor)
+      const longPnlUSD = pair.longPosition.pnl ?? 0;
+      const shortPnlUSD = pair.shortPosition.pnl ?? 0;
+      const totalPnlUSD = longPnlUSD + shortPnlUSD;
 
       const row = sheet.addRow({
         pairId: pair.id.substring(0, 8),
@@ -244,29 +249,29 @@ export class ExcelReporter {
         longExchange: pair.longPosition.exchange.toUpperCase(),
         longEntry: pair.longPosition.entryPrice.toFixed(4),
         longExit: pair.longPosition.exitPrice?.toFixed(4) || 'N/A',
-        longPnlPercent: pair.longPosition.pnlPercent?.toFixed(2) || 'N/A',
-        longPnl: longPnl.toFixed(2),
+        longPnlPercent: longPnlPercent.toFixed(2) + '%',
+        longPnlUSD: '$' + longPnlUSD.toFixed(2),
         shortExchange: pair.shortPosition.exchange.toUpperCase(),
         shortEntry: pair.shortPosition.entryPrice.toFixed(4),
         shortExit: pair.shortPosition.exitPrice?.toFixed(4) || 'N/A',
-        shortPnlPercent: pair.shortPosition.pnlPercent?.toFixed(2) || 'N/A',
-        shortPnl: shortPnl.toFixed(2),
-        openSpread: pair.openSpread.toFixed(2),
-        closeSpread: pair.currentSpread?.toFixed(2) || 'N/A',
-        totalPnlPercent: totalPnlPercent.toFixed(2),
-        totalPnl: totalPnl.toFixed(2),
+        shortPnlPercent: shortPnlPercent.toFixed(2) + '%',
+        shortPnlUSD: '$' + shortPnlUSD.toFixed(2),
+        openSpread: pair.openSpread.toFixed(2) + '%',
+        closeSpread: pair.currentSpread !== undefined ? pair.currentSpread.toFixed(2) + '%' : 'N/A',
+        totalPnlPercent: totalPnlPercent.toFixed(2) + '%',
+        totalPnlUSD: '$' + totalPnlUSD.toFixed(2),
         status: pair.status,
       });
 
       // Раскрашиваем строку в зависимости от прибыли
-      if (totalPnl > 0) {
-        row.getCell('totalPnl').fill = {
+      if (totalPnlUSD > 0) {
+        row.getCell('totalPnlUSD').fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FFC6EFCE' },
         };
-      } else if (totalPnl < 0) {
-        row.getCell('totalPnl').fill = {
+      } else if (totalPnlUSD < 0) {
+        row.getCell('totalPnlUSD').fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FFFFC7CE' },
@@ -581,7 +586,7 @@ export class ExcelReporter {
 
     // Данные
     skippedOpportunities.forEach((opp) => {
-      const reasonText = 
+      const reasonText =
         opp.reason === 'INSUFFICIENT_BALANCE' ? 'Недостаточно баланса' :
         opp.reason === 'POSITION_NOT_PROFITABLE' ? 'Текущая позиция не прибыльна' :
         'Нет свободных слотов';

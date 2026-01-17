@@ -105,7 +105,14 @@ export interface PositionPair {
 /**
  * Причина пропуска арбитражной возможности
  */
-export type SkipReason = 'INSUFFICIENT_BALANCE' | 'POSITION_NOT_PROFITABLE' | 'NO_FREE_SLOTS';
+export type SkipReason =
+  | 'INSUFFICIENT_BALANCE'
+  | 'POSITION_NOT_PROFITABLE'
+  | 'NO_FREE_SLOTS'
+  | 'SYMBOL_ALREADY_OPEN'
+  | 'PROFIT_BELOW_THRESHOLD'
+  | 'SPREAD_CLOSED'
+  | 'LIQUIDITY_LOW';
 
 /**
  * Пропущенная арбитражная возможность
